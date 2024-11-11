@@ -1,4 +1,4 @@
-from safetensors import torch
+import torch
 
 def read_results(file_path):
     query_results = {}

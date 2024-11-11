@@ -19,20 +19,25 @@ def read_results(file_path):
 
 def rerank_documents(query, documents, model, tokenizer):
     scores = []
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     for doc_id in documents:
-        # this is the first prompt
         prompt = f"Query: {query}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 10 (most relevant):"
 
-        inputs = tokenizer(prompt, return_tensors='pt', truncation=True, padding=True, max_length=512)
+        inputs = tokenizer(prompt, return_tensors='pt', truncation=True, padding=True, max_length=512).to(model.device)
 
         with torch.no_grad():
             outputs = model(**inputs)
 
         logits = outputs.logits
-        relevance_score = logits[0, -1].item()  # Use the logit of the last token
+
+        print(f"Shape of logits: {logits.shape}")  # debugging to understand  logits
+
+        last_token_logits = logits[0, -1, :]
+
+        relevance_score = last_token_logits.max().item()
 
         scores.append((doc_id, relevance_score))
 

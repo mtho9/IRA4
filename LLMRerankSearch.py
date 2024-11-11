@@ -17,9 +17,12 @@ def read_results(file_path):
     return query_results
 
 
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
 def rerank_documents(query, documents, model, tokenizer):
     scores = []
-
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -33,7 +36,7 @@ def rerank_documents(query, documents, model, tokenizer):
 
         logits = outputs.logits
 
-        print(f"Shape of logits: {logits.shape}")  # debugging to understand  logits
+        # print(f"Shape of logits: {logits.shape}")
 
         last_token_logits = logits[0, -1, :]
 
@@ -41,9 +44,9 @@ def rerank_documents(query, documents, model, tokenizer):
 
         scores.append((doc_id, relevance_score))
 
-    # sort docs
     ranked_docs = sorted(scores, key=lambda x: x[1], reverse=True)
     return ranked_docs
+
 
 def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:

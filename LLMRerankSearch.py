@@ -19,6 +19,8 @@ def read_results(file_path):
 
 def rerank_documents(query, documents, model, tokenizer):
     scores = []
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
     for doc_id in documents:
         # this is the first prompt

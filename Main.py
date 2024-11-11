@@ -7,6 +7,7 @@ from tqdm import tqdm
 model_name = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
+print("model and tokenizer loaded")
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
@@ -29,9 +30,13 @@ if __name__ == "__main__":
     topics_1_results = read_results("result_tfidf_1.tsv")
     topics_2_results = read_results("result_tfidf_2.tsv")
 
+    print(f"Loaded {len(topics_1_results)} results for topics_1")
+    print(f"Loaded {len(topics_2_results)} results for topics_2")
+
     # rerank for topics_1 with progress bar
     reranked_results_1 = {}
     for query_id, documents in tqdm(topics_1_results.items(), desc="Reranking Topics 1", unit="query"):
+        print(f"Processing query {query_id} with {len(documents)} documents...")
         reranked_docs = rerank_documents(query_id, documents, model, tokenizer)
         reranked_results_1[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
     write_ranked_results(reranked_results_1, "reranked_topics_1_results.txt")
@@ -39,6 +44,7 @@ if __name__ == "__main__":
     # rerank for topics_2 with progress bar
     reranked_results_2 = {}
     for query_id, documents in tqdm(topics_2_results.items(), desc="Reranking Topics 2", unit="query"):
+        print(f"Processing query {query_id} with {len(documents)} documents...")
         reranked_docs = rerank_documents(query_id, documents, model, tokenizer)
         reranked_results_2[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
 

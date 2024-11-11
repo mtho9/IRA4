@@ -4,7 +4,7 @@ from LLMRerankSearch import rerank_documents, read_results, write_ranked_results
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 
-model_name = "HuggingFaceTB/SmolLM2-1.7B"
+model_name = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 

@@ -16,11 +16,6 @@ def read_results(file_path):
 
     return query_results
 
-
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-
 def rerank_documents(query, documents, model, tokenizer):
     scores = []
     if tokenizer.pad_token is None:
@@ -29,24 +24,25 @@ def rerank_documents(query, documents, model, tokenizer):
     for doc_id in documents:
         prompt = f"Query: {query}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 10 (most relevant):"
 
-        inputs = tokenizer(prompt, return_tensors='pt', truncation=True, padding=True, max_length=512).to(model.device)
+        messages = [{"role": "user", "content": prompt}]
+
+        input_text = tokenizer.apply_chat_template(messages, tokenize=False)
+        inputs = tokenizer(input_text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(
+            model.device)
 
         with torch.no_grad():
-            outputs = model(**inputs)
+            outputs = model.generate(inputs.input_ids, max_new_tokens=50, temperature=0.2, top_p=0.9, do_sample=True)
 
-        logits = outputs.logits
-
-        # print(f"Shape of logits: {logits.shape}")
-
-        last_token_logits = logits[0, -1, :]
-
-        relevance_score = last_token_logits.max().item()
+        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        relevance_score = compute_relevance_score(generated_text)
 
         scores.append((doc_id, relevance_score))
 
     ranked_docs = sorted(scores, key=lambda x: x[1], reverse=True)
     return ranked_docs
 
+def compute_relevance_score(generated_text):
+    return len(generated_text)
 
 def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:

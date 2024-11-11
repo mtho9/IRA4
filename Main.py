@@ -35,7 +35,7 @@ if __name__ == "__main__":
         reranked_results_1[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
     write_ranked_results(reranked_results_1, "reranked_topics_1_results.txt")
 
-    # Rerank for topics_2
+    # rerank for topics_2
     reranked_results_2 = {}
     for query_id, documents in topics_2_results.items():
         reranked_docs = rerank_documents(query_id, documents, model, tokenizer)

@@ -16,24 +16,34 @@ def read_results(file_path):
 
     return query_results
 
+
 def rerank_documents(query, documents, model, tokenizer):
     scores = []
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    system_message = "You are a document ranking assistant who helps rank the relevance of documents based on a given query."
+
     for doc_id in documents:
         prompt = f"Query: {query}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 10 (most relevant):"
 
-        messages = [{"role": "user", "content": prompt}]
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt}
+        ]
 
         input_text = tokenizer.apply_chat_template(messages, tokenize=False)
-        inputs = tokenizer(input_text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(
-            model.device)
+        inputs = tokenizer(input_text, return_tensors="pt", padding=True, truncation=True, max_length=512,
+                           return_attention_mask=True).to(model.device)
+
+        attention_mask = inputs.attention_mask
 
         with torch.no_grad():
-            outputs = model.generate(inputs.input_ids, max_new_tokens=50, temperature=0.2, top_p=0.9, do_sample=True)
+            outputs = model.generate(inputs.input_ids, attention_mask=attention_mask, max_new_tokens=50,
+                                     temperature=0.2, top_p=0.9, do_sample=True)
 
         generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
         relevance_score = compute_relevance_score(generated_text)
 
         scores.append((doc_id, relevance_score))

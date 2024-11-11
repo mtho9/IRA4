@@ -1,46 +1,46 @@
 import sys
-import time
-import BaseSearch
-import Evaluation
-import LLM
-import LLMSearch
+import json
+from LLMRerankSearch import rerank_documents, read_results, write_ranked_results
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Main method to run COS470 Intro to IR Assignment 4
-# Retrieve documents from collection for a set of queries
-# Search with base model then rerank with LLM
-# Version: November 12, 2024
-# Authors: Mandy Ho and Abigail Pitcairn
+model_name = "HuggingFaceTB/SmolLM2-1.7B"
+model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-def main(answers, topics_1, topics_2):
-    print("Starting main...")
-
-    start = time.time()
-
-    base_results = BaseSearch.base_search(topics_1, answers)
-
-    BaseSearch.save_to_result_file(base_results, "base_result.tsv")
-    end = time.time()
-    Evaluation.evaluate_search_result("qrel_1.tsv","base_result.tsv")
-    print(f"Base search time: {end-start}")
-
-    # Rerank with LLM
-
-    # Evaluate results
-
-
-# Terminal Command: python3 Main.py Answers.json topics_1.json
-# OR python3 Main.py Answers.json topics_2.json
 if __name__ == "__main__":
-    # Manual run command because I'm lazy
-    main("Answers.json", "topics_1.json", "topics_2.json")
+    if len(sys.argv) != 4:
+        print("Usage: python main.py <answers.json> <topics_1.json> <topics_2.json>")
+        sys.exit(1)
 
-    # Uncomment this part for submission
-    # if len(sys.argv) != 4:
-    #     print("Usage: python main.py <answers.json> <topics_1.json> <topics_2.json>")
-    #     sys.exit(1)
-    #
-    # answers_file = sys.argv[1]
-    # topics_1_file = sys.argv[2]
-    # topics_2_file = sys.argv[3]
-    #
-    # main(answers_file, topics_1_file, topics_2_file)
+    answers_file = sys.argv[1]
+    topics_1_file = sys.argv[2]
+    topics_2_file = sys.argv[3]
+
+    with open(answers_file, 'r') as f:
+        answers = json.load(f)
+
+    with open(topics_1_file, 'r') as f:
+        topics_1 = json.load(f)
+
+    with open(topics_2_file, 'r') as f:
+        topics_2 = json.load(f)
+
+    topics_1_results = read_results("result_tfidf_1.tsv")
+    topics_2_results = read_results("result_tfidf_2.tsv")
+
+    # rerank for topics_1
+    reranked_results_1 = {}
+    for query_id, documents in topics_1_results.items():
+        reranked_docs = rerank_documents(query_id, documents, model, tokenizer)
+        reranked_results_1[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
+    write_ranked_results(reranked_results_1, "reranked_topics_1_results.txt")
+
+    # rerank for topics_2
+    reranked_results_2 = {}
+    for query_id, documents in topics_2_results.items():
+        reranked_docs = rerank_documents(query_id, documents, model, tokenizer)
+        reranked_results_2[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
+
+    write_ranked_results(reranked_results_2, "reranked_topics_2_results.txt")
+
+    print("Reranking complete. Results written to 'reranked_topics_1_results.txt' and 'reranked_topics_2_results.txt'.")

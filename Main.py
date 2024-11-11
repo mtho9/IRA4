@@ -2,6 +2,7 @@ import sys
 import json
 from LLMRerankSearch import rerank_documents, read_results, write_ranked_results
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from tqdm import tqdm
 
 model_name = "HuggingFaceTB/SmolLM2-1.7B"
 model = AutoModelForCausalLM.from_pretrained(model_name)
@@ -28,16 +29,16 @@ if __name__ == "__main__":
     topics_1_results = read_results("result_tfidf_1.tsv")
     topics_2_results = read_results("result_tfidf_2.tsv")
 
-    # rerank for topics_1
+    # rerank for topics_1 with progress bar
     reranked_results_1 = {}
-    for query_id, documents in topics_1_results.items():
+    for query_id, documents in tqdm(topics_1_results.items(), desc="Reranking Topics 1", unit="query"):
         reranked_docs = rerank_documents(query_id, documents, model, tokenizer)
         reranked_results_1[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
     write_ranked_results(reranked_results_1, "reranked_topics_1_results.txt")
 
-    # rerank for topics_2
+    # rerank for topics_2 with progress bar
     reranked_results_2 = {}
-    for query_id, documents in topics_2_results.items():
+    for query_id, documents in tqdm(topics_2_results.items(), desc="Reranking Topics 2", unit="query"):
         reranked_docs = rerank_documents(query_id, documents, model, tokenizer)
         reranked_results_2[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
 

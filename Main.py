@@ -37,10 +37,8 @@ if __name__ == "__main__":
     # rerank for topics_1 with progress bar
     print("Reranking Topics 1...")
     reranked_results_1 = {}
-    # show progress for each query
     for query_id, documents in tqdm(topics_1_results.items(), desc="Reranking Topics 1", unit="query"):
         query_text = next((topic["Title"] for topic in topics_1 if topic["Id"] == query_id), "")
-        print(f"Processing query {query_id} with {len(documents)} documents...")
         reranked_docs = rerank_documents(topics_1_results, topics_1, answers, model, tokenizer)
         reranked_results_1[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
 
@@ -52,7 +50,6 @@ if __name__ == "__main__":
     reranked_results_2 = {}
     for query_id, documents in tqdm(topics_2_results.items(), desc="Reranking Topics 2", unit="query"):
         query_text = next((topic["Title"] for topic in topics_2 if topic["Id"] == query_id), "")
-        print(f"Processing query {query_id} with {len(documents)} documents...")
         reranked_docs = rerank_documents(topics_2_results, topics_2, answers, model, tokenizer)
         reranked_results_2[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
 

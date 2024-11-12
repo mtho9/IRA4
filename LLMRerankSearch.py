@@ -5,31 +5,18 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 stop_words = set([
-    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves',
-    'you', "you're", "you've", "you'll", "you'd", 'your', 'yours',
-    'yourself', 'yourselves', 'he', 'him', 'his', 'himself',
-    'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its',
-    'itself', 'they', 'them', 'their', 'theirs', 'themselves',
-    'what', 'which', 'who', 'whom', 'this', 'that', "that'll",
-    'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be',
-    'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does',
-    'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or',
-    'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for',
-    'with', 'about', 'against', 'between', 'into', 'through',
-    'during', 'before', 'after', 'above', 'below', 'to', 'from',
-    'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under',
-    'again', 'further', 'then', 'once', 'here', 'there', 'when',
-    'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few',
-    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
-    'only', 'own', 'same', 'so', 'than', 'too', 'very', 's',
-    't', 'can', 'will', 'just', 'don', "don't", 'should',
-    "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y',
-    'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn',
-    "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn',
-    "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn',
-    "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan',
-    "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren',
-    "weren't", 'won', "won't", 'wouldn', "wouldn't", '-', '.'
+    # List of stop words
+    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", 'your', 'yours', 'yourself', 'yourselves',
+    'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'their',
+    'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were',
+    'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because',
+    'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after',
+    'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there',
+    'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+    'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're',
+    've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't",
+    'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't",
+    'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't", '-', '.'
 ])
 
 def clean_text(text):
@@ -61,7 +48,6 @@ def read_results(file_path) -> dict:
     with open(file_path, 'r') as file:
         for line in file:
             parts = line.split()
-
             topic_id = parts[0]
             doc_id = parts[2]
 
@@ -72,12 +58,10 @@ def read_results(file_path) -> dict:
 
     return topicdict  # returns dictionary mapping query IDs to list of doc IDs returned from tf-idf search
 
-
 def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokenizer) -> dict:
     reranked_results = {}
 
     for topic_id, doc_ids in topicdict.items():
-
         topic_parts = next((topic for topic in topics if topic['Id'] == topic_id), None)
         if not topic_parts:
             print(f"Topic ID {topic_id} not found in topics.")
@@ -96,7 +80,7 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
         for doc_id in doc_ids:
             doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
 
-            prompt = f"Query: {topic_terms}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant):"
+            prompt = f"Query: {topic_terms}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
 
             system_message = "You are a document ranking assistant who helps rank the relevance of documents based on a given query."
             messages = [
@@ -122,7 +106,11 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
                 print(f"Error: Unable to convert model output to an integer: {generated_text}")
                 model_score = 0
 
-            relevance_score = adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score)
+            # Skip cosine similarity computation if model score is 0
+            if model_score > 0:
+                relevance_score = adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score)
+            else:
+                relevance_score = model_score  # Keep the score as is if it's 0
 
             scores[doc_id] = relevance_score
 
@@ -133,6 +121,9 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
 
 def adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score):
     """Adjust the model's relevance score based on cosine similarity between document and answer text."""
+
+    if model_score == 0:  # Skip cosine similarity if model score is 0
+        return model_score
 
     if not answer_text or not doc_text:
         return model_score

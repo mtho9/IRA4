@@ -1,9 +1,6 @@
-import torch
 import re
 from bs4 import BeautifulSoup
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 stop_words = set([
     # List of stop words
@@ -61,68 +58,54 @@ def read_results(file_path) -> dict:
 def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokenizer) -> dict:
     reranked_results = {}
 
-    for topic_id, doc_ids in topicdict.items():
-        topic_parts = next((topic for topic in topics if topic['Id'] == topic_id), None)
-        if not topic_parts:
-            continue
+    preprocessed_topics = {
+        topic['Id']: clean_text(f"{topic['Title']} {topic['Body']}")
+        for topic in topics
+    }
 
-        topic_title = topic_parts['Title']
-        topic_body = topic_parts['Body']
-        topic_text = f"{topic_title} {topic_body}"
-        topic_terms = clean_text(topic_text).split()
+    with ThreadPoolExecutor() as executor:
+        future_to_topic = {
+            executor.submit(process_topic, query_id, documents, preprocessed_topics, answers, model, tokenizer): query_id
+            for query_id, documents in topicdict.items()
+        }
 
-        answer_text = next((answer['Text'] for answer in answers if answer['Id'] == topic_id), "")
+        for future in future_to_topic:
+            query_id = future_to_topic[future]
+            reranked_results[query_id] = future.result()
 
-        scores = {}
-
-        with tqdm(total=len(doc_ids), desc=f"Processing Topic {topic_id}", leave=False) as doc_pbar:
-            for doc_id in doc_ids:
-                doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
-
-                prompt = f"Query: {topic_terms}\nDocument: {doc_text}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
-
-                inputs = tokenizer([prompt], return_tensors="pt", padding=True, truncation=True).to(model.device)
-
-                outputs = model.generate(
-                    inputs["input_ids"],
-                    max_new_tokens=50,
-                    temperature=0.7,
-                    top_p=0.9,
-                    do_sample=True
-                )
-
-                generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-                try:
-                    model_score = int(generated_text.strip())
-                except ValueError:
-                    model_score = 0
-
-                scores[doc_id] = model_score
-                doc_pbar.update(1)
-
-        reranked_results[topic_id] = {doc_id: score for doc_id, score in
-                                      sorted(scores.items(), key=lambda x: x[1], reverse=True)}
     return reranked_results
 
-def adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score):
-    """Adjust the model's relevance score based on cosine similarity between document and answer text."""
+def process_topic(query_id, documents, preprocessed_topics, answers, model, tokenizer):
+    topic_text = preprocessed_topics[query_id]
+    topic_terms = topic_text.split()
 
-    if model_score == 0:  # Skip cosine similarity if model score is 0
-        return model_score
+    prompts = []
+    for doc_id in documents:
+        doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
+        prompt = f"Query: {topic_terms}\nDocument: {doc_text}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
+        prompts.append(prompt)
 
-    if not answer_text or not doc_text:
-        return model_score
+    inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(model.device)
 
-    tfidf_vectorizer = TfidfVectorizer(stop_words='english')
-    vectors = tfidf_vectorizer.fit_transform([doc_text, answer_text])
+    outputs = model.generate(
+        inputs["input_ids"],
+        max_new_tokens=50,
+        temperature=0.7,
+        top_p=0.9,
+        do_sample=True
+    )
 
-    cosine_sim = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
+    scores = {}
+    for i, doc_id in enumerate(documents):
+        generated_text = tokenizer.decode(outputs[i], skip_special_tokens=True)
+        try:
+            model_score = int(generated_text.strip())
+        except ValueError:
+            model_score = 0
 
-    if cosine_sim > 0.5:
-        model_score += 2 * cosine_sim
+        scores[doc_id] = model_score
 
-    return model_score
+    return {doc_id: score for doc_id, score in sorted(scores.items(), key=lambda x: x[1], reverse=True)}
 
 def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:

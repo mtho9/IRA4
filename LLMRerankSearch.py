@@ -16,8 +16,7 @@ def read_results(file_path):
 
     return query_results
 
-
-def rerank_documents(query, documents, model, tokenizer):
+def rerank_documents(query_id, query_text, documents, model, tokenizer):
     scores = []
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -25,7 +24,7 @@ def rerank_documents(query, documents, model, tokenizer):
     system_message = "You are a document ranking assistant who helps rank the relevance of documents based on a given query."
 
     for doc_id in documents:
-        prompt = f"Query: {query}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 10 (most relevant):"
+        prompt = f"Query: {query_text}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 10 (most relevant):"
 
         messages = [
             {"role": "system", "content": system_message},
@@ -58,6 +57,6 @@ def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:
         for query_id, documents in query_results.items():
             rank = 1
-            for doc_id, _ in documents:
-                file.write(f"{query_id} Q0 {doc_id} {rank} 0 my_reranked_system\n")
+            for doc_id, score in documents:
+                file.write(f"{query_id} Q0 {doc_id} {rank} {score} my_reranked_system\n")
                 rank += 1

@@ -30,7 +30,7 @@ def rerank_documents(query_id, query_text, documents, model, tokenizer, answers)
     # Retrieve the correct answer text for the current query
     answer_text = next((answer["Text"] for answer in answers if answer["Id"] == query_id), "")
 
-    for doc in documents:  # Iterate over the document dictionaries
+    for doc in documents:
         doc_id = doc['Id']  # Get the document ID
         doc_text = get_document_text(doc_id, documents)  # Pass 'documents' to the function
 

@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 model_name = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

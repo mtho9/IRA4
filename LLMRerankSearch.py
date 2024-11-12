@@ -64,7 +64,6 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
     for topic_id, doc_ids in topicdict.items():
         topic_parts = next((topic for topic in topics if topic['Id'] == topic_id), None)
         if not topic_parts:
-            print(f"Topic ID {topic_id} not found in topics.")
             continue
 
         topic_title = topic_parts['Title']
@@ -103,14 +102,12 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
             try:
                 model_score = int(generated_text.strip())
             except ValueError:
-                print(f"Error: Unable to convert model output to an integer: {generated_text}")
                 model_score = 0
 
-            # Skip cosine similarity computation if model score is 0
             if model_score > 0:
                 relevance_score = adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score)
             else:
-                relevance_score = model_score  # Keep the score as is if it's 0
+                relevance_score = model_score
 
             scores[doc_id] = relevance_score
 

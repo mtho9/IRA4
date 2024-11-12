@@ -115,7 +115,12 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
                                          temperature=0.2, top_p=0.9, do_sample=True)
 
             generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            model_score = int(generated_text.strip())
+
+            try:
+                model_score = int(generated_text.strip())
+            except ValueError:
+                print(f"Error: Unable to convert model output to an integer: {generated_text}")
+                model_score = 0
 
             relevance_score = adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score)
 
@@ -125,7 +130,6 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
                                       sorted(scores.items(), key=lambda x: x[1], reverse=True)}
 
     return reranked_results
-
 
 def adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score):
     """Adjust the model's relevance score based on cosine similarity between document and answer text."""

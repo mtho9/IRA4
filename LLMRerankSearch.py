@@ -1,5 +1,4 @@
 import re
-
 import torch
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -57,7 +56,7 @@ def read_results(file_path) -> dict:
 
     return topicdict
 
-def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokenizer) -> dict:
+def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokenizer, batch_size=8) -> dict:
     reranked_results = {}
 
     for topic_id, doc_ids in topicdict.items():
@@ -74,70 +73,40 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
 
         scores = {}
 
-        with tqdm(total=len(doc_ids), desc=f"Processing Topic {topic_id}", leave=False) as doc_pbar:
-            for doc_id in doc_ids:
+        doc_batches = [doc_ids[i:i + batch_size] for i in range(0, len(doc_ids), batch_size)]
+
+        for doc_batch in doc_batches:
+            prompts = []
+            for doc_id in doc_batch:
                 doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
-
                 prompt = f"Query: {topic_terms}\nDocument: {doc_text}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
+                prompts.append(prompt)
 
-                inputs = tokenizer([prompt], return_tensors="pt", padding=True, truncation=True, return_attention_mask=True).to(model.device)
+            inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, return_attention_mask=True).to(model.device)
 
-                with torch.no_grad():  # no gradients are computed
-                    outputs = model.generate(
-                        inputs["input_ids"],
-                        max_new_tokens=50,
-                        temperature=0.7,
-                        top_p=0.9,
-                        do_sample=True
-                    )
+            with torch.no_grad():
+                outputs = model.generate(
+                    inputs["input_ids"],
+                    max_new_tokens=50,
+                    temperature=0.5,  # Reduced to make output more deterministic (faster)
+                    top_p=0.85,  # Limiting to top-p sampling for speed
+                    do_sample=True
+                )
 
-                generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
+            for i, doc_id in enumerate(doc_batch):
+                generated_text = tokenizer.decode(outputs[i], skip_special_tokens=True)
                 try:
                     model_score = int(generated_text.strip())
                 except ValueError:
                     model_score = 0
-
                 scores[doc_id] = model_score
-                doc_pbar.update(1)
 
-        reranked_results[topic_id] = {doc_id: score for doc_id, score in
-                                      sorted(scores.items(), key=lambda x: x[1], reverse=True)}
-        torch.cuda.empty_cache()  # Clear the CUDA cache after processing each topic to free memory
+            # Clear GPU memory after processing the batch to free up memory for the next batch
+            torch.cuda.empty_cache()
+
+        reranked_results[topic_id] = {doc_id: score for doc_id, score in sorted(scores.items(), key=lambda x: x[1], reverse=True)}
 
     return reranked_results
-
-def process_topic(query_id, documents, preprocessed_topics, answers, model, tokenizer):
-    topic_text = preprocessed_topics[query_id]
-    topic_terms = topic_text.split()
-
-    prompts = []
-    for doc_id in documents:
-        doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
-        prompt = f"Query: {topic_terms}\nDocument: {doc_text}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
-        prompts.append(prompt)
-
-    inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(model.device)
-
-    outputs = model.generate(
-        inputs["input_ids"],
-        max_new_tokens=50,
-        temperature=0.7,
-        top_p=0.9,
-        do_sample=True
-    )
-
-    scores = {}
-    for i, doc_id in enumerate(documents):
-        generated_text = tokenizer.decode(outputs[i], skip_special_tokens=True)
-        try:
-            model_score = int(generated_text.strip())
-        except ValueError:
-            model_score = 0
-
-        scores[doc_id] = model_score
-
-    return {doc_id: score for doc_id, score in sorted(scores.items(), key=lambda x: x[1], reverse=True)}
 
 def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:

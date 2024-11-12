@@ -43,7 +43,6 @@ def remove_stop_words(text):
     return ' '.join(filtered_words)
 
 def read_results(file_path) -> dict:
-    """Reads the results file and returns a dictionary with query IDs as keys and a list of document IDs as values."""
     topicdict = {}
 
     with open(file_path, 'r') as file:
@@ -53,11 +52,11 @@ def read_results(file_path) -> dict:
             doc_id = parts[2]
 
             if topic_id not in topicdict:
-                topicdict[topic_id] = []  # if the topic ID is not a key, create an empty list for the associated docs
+                topicdict[topic_id] = []
+            if len(topicdict[topic_id]) < 100:  # limit to 100 documents per topic
+                topicdict[topic_id].append(doc_id)
 
-            topicdict[topic_id].append(doc_id)  # add doc ID to the list
-
-    return topicdict  # returns dictionary mapping query IDs to list of doc IDs returned from tf-idf search
+    return topicdict
 
 def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokenizer) -> dict:
     reranked_results = {}

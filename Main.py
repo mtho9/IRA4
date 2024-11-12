@@ -1,6 +1,5 @@
 import sys
 import json
-import torch
 from LLMRerankSearch import rerank_documents, read_results, write_ranked_results
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
@@ -8,8 +7,6 @@ from tqdm import tqdm
 model_name = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-model = model.to('cuda' if torch.cuda.is_available() else 'cpu')
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
@@ -39,7 +36,7 @@ if __name__ == "__main__":
                 reranked_results_1[query_id] = reranked_docs[query_id]
 
                 doc_pbar.update(num_documents)
-            pbar.update(1)  # Update progress bar for each query
+            pbar.update(1)
 
     write_ranked_results(reranked_results_1, "prompt1_1.tsv")
 

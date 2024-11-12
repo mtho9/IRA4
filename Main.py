@@ -10,15 +10,37 @@ from tqdm import tqdm
 os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'  # Your own directory
 os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/mandy.ho/HF/cache'  # Cache path
 
-# Your model directory path
-model_path = "/mnt/netstore1_home/mandy.ho/HF/Meta-Llama-3.1-8B-Instruct"  # Modify this to your model path
+# Model name and directory path
+model_name = "Meta-Llama-3.1-8B-Instruct"  # Modify this to your model name
+model_path = os.path.join(os.environ['HF_HOME'], model_name)  # Full path for the model
 
 # Check for GPU availability, use CPU if not available
 device = 0 if torch.cuda.is_available() else -1
 
-# Load model and tokenizer from the local directory
-model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, local_files_only=True).to(device)
-tokenizer = AutoTokenizer.from_pretrained(model_path)
+# Function to ensure the model is downloaded if not already present
+def download_model(model_name, model_path):
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    # Create the model directory if it doesn't exist
+    os.makedirs(model_path, exist_ok=True)
+
+    # Download the model and tokenizer
+    print(f"Downloading model {model_name} to {model_path}...")
+    model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=model_path)
+    print("Model and tokenizer downloaded successfully.")
+
+    return model, tokenizer
+
+# Check if the model directory exists, if not, download the model
+if not os.path.exists(model_path):
+    print(f"Model directory '{model_path}' does not exist. Downloading model...")
+    model, tokenizer = download_model(model_name, model_path)
+else:
+    # Load model and tokenizer from the local directory if it exists
+    print(f"Loading model from local directory: {model_path}")
+    model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, local_files_only=True).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
 
 # Create the pipeline manually with the model and tokenizer
 llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device)

@@ -16,7 +16,10 @@ if __name__ == "__main__":
         print("Usage: python main.py <answers.json> <topics_1.json> <topics_2.json>")
         sys.exit(1)
 
-    # Load JSON files
+    answers_file = sys.argv[1]
+    topics_1_file = sys.argv[2]
+    topics_2_file = sys.argv[3]
+
     with open(answers_file, 'r') as f:
         answers = json.load(f)
     with open(topics_1_file, 'r') as f:

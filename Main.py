@@ -2,26 +2,29 @@ import sys
 import json
 import os
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from LLMRerankSearch import rerank_documents_with_llm, read_results, write_ranked_results
-from transformers import pipeline
 from tqdm import tqdm
 
-# Set the environment variables for HF_HOME and TRANSFORMERS_CACHE
-os.environ['HF_HOME'] = '/mnt/netstore1_home/behrooz.mansouri/HF'
-os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/behrooz.mansouri/HF/cache'
+# Ensure the environment variables are set (These should be set in the shell, but we can do it here for completeness)
+os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'  # Your own directory
+os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/mandy.ho/HF/cache'  # Cache path
 
-# Set the path to the model directory on netstore
-model_path = "/mnt/netstore1_home/behrooz.mansouri/HF/Meta-Llama-3.1-8B-Instruct"
+# Your model directory path
+model_path = "/mnt/netstore1_home/mandy.ho/HF/Meta-Llama-3.1-8B-Instruct"  # Modify this to your model path
 
 # Check for GPU availability, use CPU if not available
 device = 0 if torch.cuda.is_available() else -1
 
-# Initialize the Llama-3.1-8B model using Hugging Face's pipeline, loading from the netstore path
-pipeline = pipeline("text-generation", model=model_path,
-                    model_kwargs={"torch_dtype": torch.bfloat16}, device=device)
+# Load model and tokenizer from the local directory
+model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16).to(device)
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+# Create the pipeline manually with the model and tokenizer
+llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device)
 
 # Set the pad token ID to match the tokenizer's pad token
-pipeline.model.generation_config.pad_token_id = pipeline.tokenizer.pad_token_id
+llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
@@ -55,7 +58,7 @@ if __name__ == "__main__":
     # Perform reranking for topics_1 and topics_2 using the LLM
     reranked_results_1 = {}
     with tqdm(total=len(topics_1_results), desc="Reranking Topics 1") as pbar:
-        reranked_results_1 = rerank_documents_with_llm(topics_1_results, topics_1, answers, pipeline)
+        reranked_results_1 = rerank_documents_with_llm(topics_1_results, topics_1, answers, llm_pipeline)
         pbar.update(len(topics_1_results))
 
     # Save the reranked results for topics 1
@@ -63,7 +66,7 @@ if __name__ == "__main__":
 
     reranked_results_2 = {}
     with tqdm(total=len(topics_2_results), desc="Reranking Topics 2") as pbar:
-        reranked_results_2 = rerank_documents_with_llm(topics_2_results, topics_2, answers, pipeline)
+        reranked_results_2 = rerank_documents_with_llm(topics_2_results, topics_2, answers, llm_pipeline)
         pbar.update(len(topics_2_results))
 
     # Save the reranked results for topics 2

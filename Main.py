@@ -27,6 +27,14 @@ if __name__ == "__main__":
     topics_1_results = read_results("result_tfidf_1.tsv")
     topics_2_results = read_results("result_tfidf_2.tsv")
 
+    print(f"Topics 1 Results (Total Topics: {len(topics_1_results)}):")
+    for topic_id, doc_ids in topics_1_results.items():
+        print(f"Topic {topic_id}: {len(doc_ids)} documents")
+
+    print(f"Topics 2 Results (Total Topics: {len(topics_2_results)}):")
+    for topic_id, doc_ids in topics_2_results.items():
+        print(f"Topic {topic_id}: {len(doc_ids)} documents")
+
     reranked_results_1 = {}
     with tqdm(total=len(topics_1_results), desc="Reranking Topics 1") as pbar:
         for query_id, documents in topics_1_results.items():

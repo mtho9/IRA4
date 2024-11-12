@@ -82,12 +82,15 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
 
                 prompt = f"Query: {topic_terms}\nDocument: {doc_text}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
 
-                inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=512)
+                inputs = tokenizer([prompt], return_tensors="pt", padding=True, truncation=True).to(model.device)
 
-                inputs = {key: value.to(model.device) for key, value in inputs.items()}
-
-                with torch.no_grad():
-                    outputs = model.generate(inputs['input_ids'], max_length=50, temperature=0.7, top_p=0.9, do_sample=True)
+                outputs = model.generate(
+                    inputs["input_ids"],
+                    max_new_tokens=50,
+                    temperature=0.7,
+                    top_p=0.9,
+                    do_sample=True
+                )
 
                 generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
@@ -99,7 +102,8 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
                 scores[doc_id] = model_score
                 doc_pbar.update(1)
 
-        reranked_results[topic_id] = {doc_id: score for doc_id, score in sorted(scores.items(), key=lambda x: x[1], reverse=True)}
+        reranked_results[topic_id] = {doc_id: score for doc_id, score in
+                                      sorted(scores.items(), key=lambda x: x[1], reverse=True)}
     return reranked_results
 
 def adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score):

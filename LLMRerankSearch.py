@@ -3,6 +3,7 @@ import re
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
 
 stop_words = set([
     # List of stop words
@@ -68,7 +69,6 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
 
         topic_title = topic_parts['Title']
         topic_body = topic_parts['Body']
-
         topic_text = f"{topic_title} {topic_body}"
         topic_terms = clean_text(topic_text).split()
 
@@ -76,44 +76,46 @@ def rerank_documents(topicdict: dict, topics: list, answers: list, model, tokeni
 
         scores = {}
 
-        for doc_id in doc_ids:
-            doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
+        with tqdm(total=len(doc_ids), desc=f"Processing Topic {topic_id}", leave=False) as doc_pbar:
+            for doc_id in doc_ids:
+                doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
 
-            prompt = f"Query: {topic_terms}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
+                prompt = f"Query: {topic_terms}\nDocument: {doc_id}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant). Provide only the number."
 
-            system_message = "You are a document ranking assistant who helps rank the relevance of documents based on a given query."
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt}
-            ]
+                system_message = "You are a document ranking assistant who helps rank the relevance of documents based on a given query."
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ]
 
-            input_text = tokenizer.apply_chat_template(messages, tokenize=False)
-            inputs = tokenizer(input_text, return_tensors="pt", padding=True, truncation=True, max_length=512,
-                               return_attention_mask=True).to(model.device)
+                input_text = tokenizer.apply_chat_template(messages, tokenize=False)
+                inputs = tokenizer(input_text, return_tensors="pt", padding=True, truncation=True, max_length=512,
+                                   return_attention_mask=True).to(model.device)
 
-            attention_mask = inputs.attention_mask
+                attention_mask = inputs.attention_mask
 
-            with torch.no_grad():
-                outputs = model.generate(inputs.input_ids, attention_mask=attention_mask, max_new_tokens=50,
-                                         temperature=0.2, top_p=0.9, do_sample=True)
+                with torch.no_grad():
+                    outputs = model.generate(inputs.input_ids, attention_mask=attention_mask, max_new_tokens=50,
+                                             temperature=0.2, top_p=0.9, do_sample=True)
 
-            generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            try:
-                model_score = int(generated_text.strip())
-            except ValueError:
-                model_score = 0
+                try:
+                    model_score = int(generated_text.strip())
+                except ValueError:
+                    model_score = 0
 
-            if model_score > 0:
-                relevance_score = adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score)
-            else:
-                relevance_score = model_score
+                if model_score > 0:
+                    relevance_score = adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score)
+                else:
+                    relevance_score = model_score
 
-            scores[doc_id] = relevance_score
+                scores[doc_id] = relevance_score
+
+                doc_pbar.update(1)
 
         reranked_results[topic_id] = {doc_id: score for doc_id, score in
                                       sorted(scores.items(), key=lambda x: x[1], reverse=True)}
-
     return reranked_results
 
 def adjust_score_based_on_answer(doc_id, answer_text, doc_text, model_score):

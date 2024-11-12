@@ -17,7 +17,7 @@ model_path = "/mnt/netstore1_home/mandy.ho/HF/Meta-Llama-3.1-8B-Instruct"  # Mod
 device = 0 if torch.cuda.is_available() else -1
 
 # Load model and tokenizer from the local directory
-model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16).to(device)
+model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, local_files_only=True).to(device)
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 
 # Create the pipeline manually with the model and tokenizer

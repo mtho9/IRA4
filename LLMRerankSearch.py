@@ -1,7 +1,5 @@
 import re
-import torch
 from bs4 import BeautifulSoup
-from tqdm import tqdm
 
 stop_words = set([
     # List of stop words

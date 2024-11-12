@@ -1,8 +1,14 @@
 import sys
 import json
-from LLMRerankSearch import rerank_documents_with_llm, read_results, write_ranked_results
+import os
 import torch
+from LLMRerankSearch import rerank_documents_with_llm, read_results, write_ranked_results
 from transformers import pipeline
+from tqdm import tqdm
+
+# Set the environment variables for HF_HOME and TRANSFORMERS_CACHE
+os.environ['HF_HOME'] = '/mnt/netstore1_home/behrooz.mansouri/HF'
+os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/behrooz.mansouri/HF/cache'
 
 # Set the path to the model directory on netstore
 model_path = "/mnt/netstore1_home/behrooz.mansouri/HF/Meta-Llama-3.1-8B-Instruct"
@@ -35,8 +41,8 @@ if __name__ == "__main__":
         topics_2 = json.load(f)
 
     # Read result files
-    topics_1_results = read_results("result_tfidf_1.tsv")
-    topics_2_results = read_results("result_tfidf_2.tsv")
+    topics_1_results = read_results("bm25_1.tsv")
+    topics_2_results = read_results("bm25_2.tsv")
 
     print(f"Topics 1 Results (Total Topics: {len(topics_1_results)}):")
     for topic_id, doc_ids in topics_1_results.items():

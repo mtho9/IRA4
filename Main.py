@@ -1,5 +1,6 @@
 import sys
 import json
+import torch
 from LLMRerankSearch import rerank_documents, read_results, write_ranked_results
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm

@@ -35,10 +35,9 @@ if __name__ == "__main__":
         for query_id, documents in topics_1_results.items():
             with tqdm(total=len(documents), desc=f"Processing Query {query_id}", leave=False) as doc_pbar:
                 reranked_docs = rerank_documents(topics_1_results, topics_1, answers, model, tokenizer)
-                reranked_results_1[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
+                reranked_results_1[query_id] = reranked_docs[query_id]
                 doc_pbar.update(len(documents))
             pbar.update(1)
-
     write_ranked_results(reranked_results_1, "prompt1_1.tsv")
 
     reranked_results_2 = {}
@@ -46,8 +45,7 @@ if __name__ == "__main__":
         for query_id, documents in topics_2_results.items():
             with tqdm(total=len(documents), desc=f"Processing Query {query_id}", leave=False) as doc_pbar:
                 reranked_docs = rerank_documents(topics_2_results, topics_2, answers, model, tokenizer)
-                reranked_results_2[query_id] = [(doc_id, score) for doc_id, score in reranked_docs]
+                reranked_results_2[query_id] = reranked_docs[query_id]
                 doc_pbar.update(len(documents))
             pbar.update(1)
-
     write_ranked_results(reranked_results_2, "prompt1_2.tsv")

@@ -8,6 +8,8 @@ model_name = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+model = model.to('cuda' if torch.cuda.is_available() else 'cpu')
+
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python main.py <answers.json> <topics_1.json> <topics_2.json>")

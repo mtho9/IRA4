@@ -134,7 +134,8 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
         if not query:
             continue  # Skip this topic if no matching query was found
 
-        topic_answers = answers.get(str(topic_id), [])
+        # Instead of using get() for answers, search for the relevant answers
+        topic_answers = [answer for answer in answers if str(answer['Id']) == str(topic_id)]
 
         # Create query-document pairs: each document is paired with the query
         query_document_pairs = [(query, doc) for doc in doc_ids]
@@ -155,7 +156,6 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
         logits = outputs.logits  # Extract logits or whatever score is provided by the model
 
         # Compute the relevance score (e.g., by averaging the logits across the token dimension)
-        # You may want to use another method of scoring depending on your needs
         document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
 
         # Rank documents by relevance score (higher scores are more relevant)

@@ -16,10 +16,10 @@ hf_token = "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"  # Replace with your Hugging 
 # Specify the model ID for Meta-Llama 3.1
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
-# Load model and tokenizer from Hugging Face, using the access token
+device = "cuda" if torch.cuda.is_available() else "cpu"
 model = AutoModelForCausalLM.from_pretrained(model_id,
-                                            torch_dtype=torch.float16,  # Use FP16 instead of FP32
-                                            device_map="cpu",
+                                            torch_dtype=torch.float32,  # Use FP16 instead of FP32
+                                            device_map="cuda",
                                             use_auth_token=hf_token)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 

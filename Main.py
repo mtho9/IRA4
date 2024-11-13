@@ -3,7 +3,7 @@ import json
 import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from LLMRerankSearch import rerank_documents_with_llm, read_results, write_ranked_results
+from LLMRerankSearch import rerank_documents_with_qg, read_results, write_ranked_results
 from tqdm import tqdm
 
 # Ensure the environment variables are set to store models on netstore (IMPORTANT!)
@@ -61,19 +61,20 @@ if __name__ == "__main__":
     for topic_id, doc_ids in topics_2_results.items():
         print(f"Topic {topic_id}: {len(doc_ids)} documents")
 
-    # Perform reranking for topics_1 and topics_2 using the LLM
+    # Perform reranking for topics_1 using Query Generation method
     reranked_results_1 = {}
     with tqdm(total=len(topics_1_results), desc="Reranking Topics 1") as pbar:
-        reranked_results_1 = rerank_documents_with_llm(topics_1_results, topics_1, answers, llm_pipeline)
+        reranked_results_1 = rerank_documents_with_qg(topics_1_results, topics_1, answers, llm_pipeline)
         pbar.update(len(topics_1_results))
 
     # Save the reranked results for topics 1
-    write_ranked_results(reranked_results_1, "reranked_results_1.tsv")
+    write_ranked_results(reranked_results_1, "reranked_results_1_qg.tsv")
 
+    # Perform reranking for topics_2 using Query Generation method
     reranked_results_2 = {}
     with tqdm(total=len(topics_2_results), desc="Reranking Topics 2") as pbar:
-        reranked_results_2 = rerank_documents_with_llm(topics_2_results, topics_2, answers, llm_pipeline)
+        reranked_results_2 = rerank_documents_with_qg(topics_2_results, topics_2, answers, llm_pipeline)
         pbar.update(len(topics_2_results))
 
     # Save the reranked results for topics 2
-    write_ranked_results(reranked_results_2, "reranked_results_2.tsv")
+    write_ranked_results(reranked_results_2, "reranked_results_2_qg.tsv")

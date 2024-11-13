@@ -1,4 +1,5 @@
 import re
+import torch
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
 
@@ -71,13 +72,13 @@ def read_results(file_path) -> dict:
     return topicdict
 
 
-def generate_prompt(query_id, doc_ids, topics, answers):
-    """Generate a prompt for the LLM to rank document relevance based on the query."""
+def generate_prompt_for_qg(query_id, doc_ids, topics, answers):
+    """Generate a prompt for the LLM to generate the query from the document."""
 
     # Define the system message to guide the LLM
     system_message = "You are a relevance document judger for a search engine. " \
-                     "For each document, rank its relevance to the query from 1 (least relevant) to 5 (most relevant). " \
-                     "You will only output the relevance score."
+                     "For each document, generate the query based on the document's content. " \
+                     "Then, calculate the relevance of the document to the original query based on how closely the generated query matches the original query."
 
     # Retrieve the query details from the topics
     query = next((topic for topic in topics if topic['Id'] == query_id), None)
@@ -92,40 +93,49 @@ def generate_prompt(query_id, doc_ids, topics, answers):
     prompts = []
     for doc_id in doc_ids:
         doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
-        prompt = f"Query: {query_text}\nDocument: {doc_text}\nRank the relevance of this document from 1 (least relevant) to 5 (most relevant)."
+        prompt = f"Query: {query_text}\nDocument: {doc_text}\nGenerate a query based on the document's content and assess the relevance of this document to the query."
         prompts.append(prompt)
 
     return prompts
 
 
-def process_batch(doc_batch, pipeline):
-    """Process a batch of documents using the LLM pipeline."""
+def process_batch_for_qg(doc_batch, pipeline, query_text):
+    """Process a batch of documents using the LLM pipeline and compute query likelihood."""
     outputs = pipeline(doc_batch, max_new_tokens=50, temperature=0.6, top_p=0.9,
                        pad_token_id=pipeline.tokenizer.eos_token_id)
 
     batch_scores = {}
     for i, output in enumerate(outputs):
+        # Get the generated query text from the LLM's output
         generated_text = output[0]['generated_text']
-        try:
-            model_score = int(generated_text.strip())
-        except ValueError:
-            model_score = 0  # Default to 0 if parsing fails
-        batch_scores[i] = model_score
+
+        # Compute the log-likelihood of the generated query matching the original query
+        input_ids = pipeline.tokenizer(query_text, return_tensors="pt").input_ids.to(pipeline.device)
+        generated_ids = pipeline.tokenizer(generated_text, return_tensors="pt").input_ids.to(pipeline.device)
+
+        # Compute log-likelihood of the generated query against the original query
+        with torch.no_grad():
+            # Calculate log-probabilities for each token in the generated query
+            outputs = pipeline.model(input_ids=input_ids, labels=generated_ids)
+            log_likelihood = outputs.loss.item()  # This is the negative log-likelihood loss
+
+        # Assign the log-likelihood as the relevance score
+        batch_scores[i] = -log_likelihood  # Negative because loss is lower for more relevant queries
 
     return batch_scores
 
 
-def rerank_documents_with_llm(topicdict, topics, answers, pipeline, batch_size=4) -> dict:
-    """Rerank the documents using the LLM with parallelized processing."""
+def rerank_documents_with_qg(topicdict, topics, answers, pipeline, batch_size=4) -> dict:
+    """Rerank the documents using the LLM with pointwise query generation."""
     reranked_results = {}
 
     with ThreadPoolExecutor() as executor:
         for topic_id, doc_ids in topicdict.items():
-            prompts = generate_prompt(topic_id, doc_ids, topics, answers)
+            prompts = generate_prompt_for_qg(topic_id, doc_ids, topics, answers)
             doc_batches = [prompts[i:i + batch_size] for i in range(0, len(prompts), batch_size)]
 
             # Run the batches concurrently
-            futures = [executor.submit(process_batch, batch, pipeline) for batch in doc_batches]
+            futures = [executor.submit(process_batch_for_qg, batch, pipeline, topics[0]['Body']) for batch in doc_batches]
 
             scores = {}
             for future in futures:

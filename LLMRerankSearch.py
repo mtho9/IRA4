@@ -125,7 +125,7 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     return batch_scores
 
 
-def rerank_documents_with_qg(topicdict, topics, answers, pipeline, batch_size=4) -> dict:
+def rerank_documents_with_qg(topicdict, topics, answers, pipeline, batch_size=2) -> dict:
     """Rerank the documents using the LLM with pointwise query generation."""
     reranked_results = {}
 

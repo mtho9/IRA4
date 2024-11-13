@@ -18,8 +18,8 @@ model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 # Load model and tokenizer from Hugging Face, using the access token
 model = AutoModelForCausalLM.from_pretrained(model_id,
-                                            torch_dtype=torch.float32,  # Use FP32 instead of bfloat16
-                                            device_map="auto",
+                                            torch_dtype=torch.float16,  # Use FP16 instead of FP32
+                                            device_map="cpu",
                                             use_auth_token=hf_token)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 

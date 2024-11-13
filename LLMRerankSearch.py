@@ -1,7 +1,6 @@
 import re
 import torch
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
 
 stop_words = set([
     # List of stop words
@@ -125,30 +124,44 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     return batch_scores
 
 
-def rerank_documents_with_qg(topicdict, topics, answers, pipeline, batch_size=2) -> dict:
-    """Rerank the documents using the LLM with pointwise query generation."""
-    reranked_results = {}
+def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokenizer, device):
+    reranked_docs = {}
 
-    with ThreadPoolExecutor() as executor:
-        for topic_id, doc_ids in topicdict.items():
-            prompts = generate_prompt_for_qg(topic_id, doc_ids, topics, answers)
-            doc_batches = [prompts[i:i + batch_size] for i in range(0, len(prompts), batch_size)]
+    # Loop over each topic and its document results
+    for topic_id, doc_ids in doc_results.items():
+        query = topics[topic_id]  # Get the query for the topic
+        topic_answers = answers.get(str(topic_id), [])
 
-            # Run the batches concurrently
-            futures = [executor.submit(process_batch_for_qg, batch, pipeline, topics[0]['Body']) for batch in doc_batches]
+        # Create query-document pairs: each document is paired with the query
+        query_document_pairs = [(query, doc) for doc in doc_ids]
 
-            scores = {}
-            for future in futures:
-                batch_scores = future.result()
-                for idx, score in batch_scores.items():
-                    doc_id = doc_ids[idx]
-                    scores[doc_id] = score
+        # Tokenize the queries and documents together
+        # We're creating a batch of query-document pairs, so we need to tokenize them
+        queries = [pair[0] for pair in query_document_pairs]
+        documents = [pair[1] for pair in query_document_pairs]
 
-            reranked_results[topic_id] = {doc_id: score for doc_id, score in
-                                          sorted(scores.items(), key=lambda x: x[1], reverse=True)}
+        # Tokenize both queries and documents (batching them)
+        inputs = tokenizer(queries, documents, return_tensors="pt", padding=True, truncation=True).to(device)
 
-    return reranked_results
+        # Get model predictions
+        with torch.no_grad():
+            # Pass the tokenized input through the LLM
+            outputs = llm_pipeline.model(**inputs)
 
+        # Assume the model outputs logits; you might need to adjust based on your actual model's output
+        logits = outputs.logits  # Extract logits or whatever score is provided by the model
+
+        # Compute the relevance score (e.g., by averaging the logits across the token dimension)
+        # You may want to use another method of scoring depending on your needs
+        document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
+
+        # Rank documents by relevance score (higher scores are more relevant)
+        ranked_docs = sorted(zip(doc_ids, document_scores.cpu().numpy()), key=lambda x: x[1], reverse=True)
+
+        # Store the reranked document IDs
+        reranked_docs[topic_id] = [doc_id for doc_id, score in ranked_docs]
+
+    return reranked_docs
 
 def write_ranked_results(query_results, output_file):
     """Write ranked results to a file."""

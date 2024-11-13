@@ -129,14 +129,17 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
 
     # Loop over each topic and its document results
     for topic_id, doc_ids in doc_results.items():
-        query = topics[topic_id]  # Get the query for the topic
+        # Get the query for the topic by matching 'Id' with topic_id
+        query = next((topic for topic in topics if topic['Id'] == topic_id), None)
+        if not query:
+            continue  # Skip this topic if no matching query was found
+
         topic_answers = answers.get(str(topic_id), [])
 
         # Create query-document pairs: each document is paired with the query
         query_document_pairs = [(query, doc) for doc in doc_ids]
 
         # Tokenize the queries and documents together
-        # We're creating a batch of query-document pairs, so we need to tokenize them
         queries = [pair[0] for pair in query_document_pairs]
         documents = [pair[1] for pair in query_document_pairs]
 

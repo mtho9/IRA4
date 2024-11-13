@@ -124,21 +124,19 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     return batch_scores
 
 
-def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokenizer, device):
+def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokenizer, device, batch_size=1):
     reranked_docs = {}
 
-    # Ensure tokenizer has a pad token
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token  # Use eos_token as pad_token if none exists
 
     # Loop over each topic and its document results
     for topic_id, doc_ids in doc_results.items():
-        # Get the query for the topic by matching 'Id' with topic_id
         query = next((topic for topic in topics if topic['Id'] == topic_id), None)
         if not query:
-            continue  # Skip this topic if no matching query was found
+            continue
 
-        # Instead of using get() for answers, search for the relevant answers
+        # Get answers for the topic
         topic_answers = [answer for answer in answers if str(answer['Id']) == str(topic_id)]
 
         # Create query-document pairs: each document is paired with the query
@@ -147,27 +145,36 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
         # Concatenate query and document to prepare for tokenization
         query_document_texts = [f"{pair[0]} {pair[1]}" for pair in query_document_pairs]
 
-        # Tokenize the concatenated queries and documents as a batch
-        inputs = tokenizer(query_document_texts, return_tensors="pt", padding=True, truncation=True).to(device)
+        # Process documents in smaller batches
+        all_ranked_docs = []
+        for i in range(0, len(query_document_texts), batch_size):
+            batch = query_document_texts[i:i + batch_size]
 
-        # Get model predictions
-        with torch.no_grad():
-            # Pass the tokenized input through the LLM
-            outputs = llm_pipeline.model(**inputs)
+            # Tokenize the batch
+            inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(device)
 
-        # Assume the model outputs logits; you might need to adjust based on your actual model's output
-        logits = outputs.logits  # Extract logits or whatever score is provided by the model
+            # Get model predictions
+            with torch.no_grad():
+                outputs = llm_pipeline.model(**inputs)
 
-        # Compute the relevance score (e.g., by averaging the logits across the token dimension)
-        document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
+            # Assuming the model outputs logits
+            logits = outputs.logits
 
-        # Rank documents by relevance score (higher scores are more relevant)
-        ranked_docs = sorted(zip(doc_ids, document_scores.cpu().numpy()), key=lambda x: x[1], reverse=True)
+            # Compute the relevance score (e.g., by averaging the logits across the token dimension)
+            document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
+
+            # Rank documents by relevance score (higher scores are more relevant)
+            ranked_docs = sorted(zip(doc_ids[i:i + batch_size], document_scores.cpu().numpy()), key=lambda x: x[1], reverse=True)
+
+            all_ranked_docs.extend(ranked_docs)
+
+            torch.cuda.empty_cache()
 
         # Store the reranked document IDs
-        reranked_docs[topic_id] = [doc_id for doc_id, score in ranked_docs]
+        reranked_docs[topic_id] = [doc_id for doc_id, score in all_ranked_docs]
 
     return reranked_docs
+
 
 def write_ranked_results(query_results, output_file):
     """Write ranked results to a file."""

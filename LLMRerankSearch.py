@@ -160,8 +160,7 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
             # Assuming the model outputs logits
             logits = outputs.logits
 
-            # Compute the relevance score (e.g., by averaging the logits across the token dimension)
-            document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
+            document_scores = logits.max(dim=-1).values.cpu().numpy()
 
             # Rank documents by relevance score (higher scores are more relevant)
             ranked_docs = sorted(zip(doc_ids[i:i + batch_size], document_scores.cpu().numpy()), key=lambda x: x[1], reverse=True)
@@ -183,5 +182,6 @@ def write_ranked_results(query_results, output_file):
             rank = 1
             # Iterate directly over the list of (doc_id, score) tuples
             for doc_id, score in documents:
-                file.write(f"{query_id} Q0 {doc_id} {rank} {score} my_reranked_system\n")
+                # Ensure score is a float and formatted properly
+                file.write(f"{query_id} Q0 {doc_id} {rank} {float(score):.6f} my_reranked_system\n")
                 rank += 1

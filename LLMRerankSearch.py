@@ -127,6 +127,10 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
 def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokenizer, device):
     reranked_docs = {}
 
+    # Ensure tokenizer has a pad token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token  # Use eos_token as pad_token if none exists
+
     # Loop over each topic and its document results
     for topic_id, doc_ids in doc_results.items():
         # Get the query for the topic by matching 'Id' with topic_id
@@ -140,8 +144,8 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
         # Create query-document pairs: each document is paired with the query
         query_document_pairs = [(query, doc) for doc in doc_ids]
 
-        # Tokenize the queries and documents together as pairs
-        query_document_texts = [f"{pair[0]} {pair[1]}" for pair in query_document_pairs]  # Concatenate query and document
+        # Concatenate query and document to prepare for tokenization
+        query_document_texts = [f"{pair[0]} {pair[1]}" for pair in query_document_pairs]
 
         # Tokenize the concatenated queries and documents as a batch
         inputs = tokenizer(query_document_texts, return_tensors="pt", padding=True, truncation=True).to(device)

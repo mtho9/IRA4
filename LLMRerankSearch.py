@@ -170,8 +170,8 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
 
             torch.cuda.empty_cache()
 
-        # Store the reranked document IDs
-        reranked_docs[topic_id] = [doc_id for doc_id, score in all_ranked_docs]
+        # Store the reranked document IDs with their scores
+        reranked_docs[topic_id] = all_ranked_docs  # Store as a list of (doc_id, score) tuples
 
     return reranked_docs
 
@@ -181,6 +181,7 @@ def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:
         for query_id, documents in query_results.items():
             rank = 1
-            for doc_id, score in documents.items():
+            # Iterate directly over the list of (doc_id, score) tuples
+            for doc_id, score in documents:
                 file.write(f"{query_id} Q0 {doc_id} {rank} {score} my_reranked_system\n")
                 rank += 1

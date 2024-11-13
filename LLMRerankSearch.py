@@ -1,5 +1,6 @@
 import re
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor
 
 stop_words = set([
     # List of stop words
@@ -97,35 +98,44 @@ def generate_prompt(query_id, doc_ids, topics, answers):
     return prompts
 
 
+def process_batch(doc_batch, pipeline):
+    """Process a batch of documents using the LLM pipeline."""
+    outputs = pipeline(doc_batch, max_new_tokens=50, temperature=0.6, top_p=0.9,
+                       pad_token_id=pipeline.tokenizer.eos_token_id)
+
+    batch_scores = {}
+    for i, output in enumerate(outputs):
+        generated_text = output[0]['generated_text']
+        try:
+            model_score = int(generated_text.strip())
+        except ValueError:
+            model_score = 0  # Default to 0 if parsing fails
+        batch_scores[i] = model_score
+
+    return batch_scores
+
+
 def rerank_documents_with_llm(topicdict, topics, answers, pipeline, batch_size=8) -> dict:
-    """Rerank the documents using the LLM."""
+    """Rerank the documents using the LLM with parallelized processing."""
     reranked_results = {}
 
-    for topic_id, doc_ids in topicdict.items():
-        prompts = generate_prompt(topic_id, doc_ids, topics, answers)
+    with ThreadPoolExecutor() as executor:
+        for topic_id, doc_ids in topicdict.items():
+            prompts = generate_prompt(topic_id, doc_ids, topics, answers)
+            doc_batches = [prompts[i:i + batch_size] for i in range(0, len(prompts), batch_size)]
 
-        doc_batches = [prompts[i:i + batch_size] for i in range(0, len(prompts), batch_size)]
+            # Run the batches concurrently
+            futures = [executor.submit(process_batch, batch, pipeline) for batch in doc_batches]
 
-        scores = {}
-        for doc_batch in doc_batches:
-            outputs = pipeline(doc_batch, max_new_tokens=50, temperature=0.6, top_p=0.9,
-                               pad_token_id=pipeline.tokenizer.eos_token_id)
+            scores = {}
+            for future in futures:
+                batch_scores = future.result()
+                for idx, score in batch_scores.items():
+                    doc_id = doc_ids[idx]
+                    scores[doc_id] = score
 
-            for i, output in enumerate(outputs):
-                # `output` is a list, access the first element and extract 'generated_text'
-                generated_text = output[0]['generated_text']
-
-                try:
-                    # Extract the score from the generated text (assuming the score is output as a number)
-                    model_score = int(generated_text.strip())
-                except ValueError:
-                    model_score = 0  # Default to 0 if parsing fails
-
-                doc_id = doc_ids[i]
-                scores[doc_id] = model_score
-
-        reranked_results[topic_id] = {doc_id: score for doc_id, score in
-                                      sorted(scores.items(), key=lambda x: x[1], reverse=True)}
+            reranked_results[topic_id] = {doc_id: score for doc_id, score in
+                                          sorted(scores.items(), key=lambda x: x[1], reverse=True)}
 
     return reranked_results
 

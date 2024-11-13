@@ -18,16 +18,22 @@ hf_token = "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"  # Replace with your Hugging 
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model = AutoModelForCausalLM.from_pretrained(model_id,
-                                            torch_dtype=torch.float16,
-                                            device_map="auto",  # Let Accelerate offload parts of the model
-                                            use_auth_token=hf_token)
+print(f"Using device: {device}")
+
+# Load the model and tokenizer from Hugging Face
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    torch_dtype=torch.float16,  # Use FP16 for efficient memory usage
+    device_map="auto",  # Let Accelerate manage the model's device placement
+    use_auth_token=hf_token
+)
+
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 
-# Create the text-generation pipeline without the 'device' argument
-llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, model_kwargs={"torch_dtype": torch.bfloat16})
+# Create the text-generation pipeline
+llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, model_kwargs={"torch_dtype": torch.float16})
 
-# Set the pad token ID to match the tokenizer's pad token
+# Set pad token ID to match the tokenizer's pad token
 llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id
 
 if __name__ == "__main__":
@@ -51,8 +57,9 @@ if __name__ == "__main__":
     topics_1_results = read_results("bm25_1.tsv")
     topics_2_results = read_results("bm25_2.tsv")
 
-    print(torch.cuda.memory_allocated())
-    print(torch.cuda.memory_reserved())
+    # Print memory allocation for debugging
+    print(f"Memory allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+    print(f"Memory reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
 
     print(f"Topics 1 Results (Total Topics: {len(topics_1_results)}):")
     for topic_id, doc_ids in topics_1_results.items():

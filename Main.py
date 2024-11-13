@@ -7,8 +7,8 @@ from LLMRerankSearch import rerank_documents_with_llm, read_results, write_ranke
 from tqdm import tqdm
 
 # Ensure the environment variables are set to store models on netstore (IMPORTANT!)
-os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'  # Specify netstore directory
-os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/mandy.ho/HF/cache'  # Specify cache directory
+os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
+os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
 
 # Your Hugging Face access token (replace with your actual token)
 hf_token = "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"  # Replace with your Hugging Face access token

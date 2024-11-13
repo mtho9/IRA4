@@ -2,9 +2,10 @@ import sys
 import json
 import os
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from LLMRerankSearch import rerank_documents_with_qg, read_results, write_ranked_results
-from tqdm import tqdm
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 
 # Ensure the environment variables are set to store models on netstore (IMPORTANT!)
 os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
@@ -18,8 +19,8 @@ model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = AutoModelForCausalLM.from_pretrained(model_id,
-                                            torch_dtype=torch.float32,  # Use FP16 instead of FP32
-                                            device_map="cuda",
+                                            torch_dtype=torch.float16,
+                                            device_map="auto",  # Let Accelerate offload parts of the model
                                             use_auth_token=hf_token)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 

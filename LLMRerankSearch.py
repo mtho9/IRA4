@@ -115,7 +115,7 @@ def process_batch(doc_batch, pipeline):
     return batch_scores
 
 
-def rerank_documents_with_llm(topicdict, topics, answers, pipeline, batch_size=8) -> dict:
+def rerank_documents_with_llm(topicdict, topics, answers, pipeline, batch_size=4) -> dict:
     """Rerank the documents using the LLM with parallelized processing."""
     reranked_results = {}
 

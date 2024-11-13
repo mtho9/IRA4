@@ -18,9 +18,9 @@ model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 # Load model and tokenizer from Hugging Face, using the access token
 model = AutoModelForCausalLM.from_pretrained(model_id,
-                                             torch_dtype=torch.bfloat16,
-                                             device_map="auto",  # Let accelerate manage the device
-                                             use_auth_token=hf_token)
+                                            torch_dtype=torch.float32,  # Use FP32 instead of bfloat16
+                                            device_map="auto",
+                                            use_auth_token=hf_token)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 
 # Create the text-generation pipeline without the 'device' argument
@@ -49,6 +49,9 @@ if __name__ == "__main__":
     # Read result files
     topics_1_results = read_results("bm25_1.tsv")
     topics_2_results = read_results("bm25_2.tsv")
+
+    print(torch.cuda.memory_allocated())
+    print(torch.cuda.memory_reserved())
 
     print(f"Topics 1 Results (Total Topics: {len(topics_1_results)}):")
     for topic_id, doc_ids in topics_1_results.items():

@@ -140,12 +140,11 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
         # Create query-document pairs: each document is paired with the query
         query_document_pairs = [(query, doc) for doc in doc_ids]
 
-        # Tokenize the queries and documents together
-        queries = [pair[0] for pair in query_document_pairs]
-        documents = [pair[1] for pair in query_document_pairs]
+        # Tokenize the queries and documents together as pairs
+        query_document_texts = [f"{pair[0]} {pair[1]}" for pair in query_document_pairs]  # Concatenate query and document
 
-        # Tokenize both queries and documents (batching them)
-        inputs = tokenizer(queries, documents, return_tensors="pt", padding=True, truncation=True).to(device)
+        # Tokenize the concatenated queries and documents as a batch
+        inputs = tokenizer(query_document_texts, return_tensors="pt", padding=True, truncation=True).to(device)
 
         # Get model predictions
         with torch.no_grad():

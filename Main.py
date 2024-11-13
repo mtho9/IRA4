@@ -16,18 +16,15 @@ hf_token = "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"  # Replace with your Hugging 
 # Specify the model ID for Meta-Llama 3.1
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
-# Check for GPU availability, use CPU if not available
-device = 0 if torch.cuda.is_available() else -1
-
 # Load model and tokenizer from Hugging Face, using the access token
 model = AutoModelForCausalLM.from_pretrained(model_id,
                                              torch_dtype=torch.bfloat16,
-                                             device_map="auto",
-                                             use_auth_token=hf_token).to(device)
+                                             device_map="auto",  # Let accelerate manage the device
+                                             use_auth_token=hf_token)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 
-# Create the text-generation pipeline manually with the model and tokenizer
-llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device, model_kwargs={"torch_dtype": torch.bfloat16})
+# Create the text-generation pipeline without the 'device' argument
+llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, model_kwargs={"torch_dtype": torch.bfloat16})
 
 # Set the pad token ID to match the tokenizer's pad token
 llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id

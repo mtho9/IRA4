@@ -6,44 +6,28 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from LLMRerankSearch import rerank_documents_with_llm, read_results, write_ranked_results
 from tqdm import tqdm
 
-# Ensure the environment variables are set (These should be set in the shell, but we can do it here for completeness)
-os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'  # Your own directory
-os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/mandy.ho/HF/cache'  # Cache path
+# Ensure the environment variables are set to store models on netstore (IMPORTANT!)
+os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'  # Specify netstore directory
+os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/mandy.ho/HF/cache'  # Specify cache directory
 
-# Model name and directory path
-model_name = "Meta-Llama-3.1-8B-Instruct"  # Modify this to your model name
-model_path = os.path.join(os.environ['HF_HOME'], model_name)  # Full path for the model
+# Your Hugging Face access token (replace with your actual token)
+hf_token = "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"  # Replace with your Hugging Face access token
+
+# Specify the model ID for Meta-Llama 3.1
+model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 # Check for GPU availability, use CPU if not available
 device = 0 if torch.cuda.is_available() else -1
 
-# Function to ensure the model is downloaded if not already present
-def download_model(model_name, model_path):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+# Load model and tokenizer from Hugging Face, using the access token
+model = AutoModelForCausalLM.from_pretrained(model_id,
+                                             torch_dtype=torch.bfloat16,
+                                             device_map="auto",
+                                             use_auth_token=hf_token).to(device)
+tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 
-    # Create the model directory if it doesn't exist
-    os.makedirs(model_path, exist_ok=True)
-
-    # Download the model and tokenizer
-    print(f"Downloading model {model_name} to {model_path}...")
-    model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=model_path)
-    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=model_path)
-    print("Model and tokenizer downloaded successfully.")
-
-    return model, tokenizer
-
-# Check if the model directory exists, if not, download the model
-if not os.path.exists(model_path):
-    print(f"Model directory '{model_path}' does not exist. Downloading model...")
-    model, tokenizer = download_model(model_name, model_path)
-else:
-    # Load model and tokenizer from the local directory if it exists
-    print(f"Loading model from local directory: {model_path}")
-    model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, local_files_only=True).to(device)
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-# Create the pipeline manually with the model and tokenizer
-llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device)
+# Create the text-generation pipeline manually with the model and tokenizer
+llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device, model_kwargs={"torch_dtype": torch.bfloat16})
 
 # Set the pad token ID to match the tokenizer's pad token
 llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id

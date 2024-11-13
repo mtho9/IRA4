@@ -112,8 +112,8 @@ def rerank_documents_with_llm(topicdict, topics, answers, pipeline, batch_size=8
                                pad_token_id=pipeline.tokenizer.eos_token_id)
 
             for i, output in enumerate(outputs):
-                # `output` is a list of generated results, so we need to handle it correctly
-                generated_text = output[0]['generated_text']  # Adjusted to access the correct index
+                # `output` is a list, access the first element and extract 'generated_text'
+                generated_text = output[0]['generated_text']
 
                 try:
                     # Extract the score from the generated text (assuming the score is output as a number)

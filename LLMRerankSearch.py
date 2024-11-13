@@ -160,7 +160,8 @@ def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokeniz
             # Assuming the model outputs logits
             logits = outputs.logits
 
-            document_scores = logits.max(dim=-1).values.cpu().numpy()
+            document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
+            document_scores = document_scores.cpu().numpy()  # Move to CPU and convert to numpy array
 
             # Rank documents by relevance score (higher scores are more relevant)
             ranked_docs = sorted(zip(doc_ids[i:i + batch_size], document_scores.cpu().numpy()), key=lambda x: x[1], reverse=True)

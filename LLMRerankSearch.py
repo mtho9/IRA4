@@ -124,40 +124,62 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     return batch_scores
 
 
-def rerank_documents_with_embeddings(doc_results, topics, answers, model, tokenizer, device, batch_size=8):
+import torch
+import torch.nn.functional as F
+
+
+def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, device):
     reranked_docs = {}
 
+    # Ensure the pad_token is set correctly
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token  # Ensure pad_token is set
 
+    # Loop through each topic and its corresponding documents
     for topic_id, doc_ids in doc_results.items():
+        # Get the query for the current topic
         query = next((topic for topic in topics if topic['Id'] == topic_id), None)
         if not query:
             continue
 
-        topic_answers = [answer for answer in answers if str(answer['Id']) == str(topic_id)]
-
-        # Prepare query and documents for tokenization
         query_text = f"{query['Title']} {query['Body']}"
-        document_texts = [f"{query_text} {answer['Text']}" for answer in topic_answers]
 
-        # Tokenize the batch in one go
-        inputs = tokenizer(document_texts, return_tensors="pt", padding=True, truncation=True).to(device)
+        # Prepare a list to hold the document texts
+        document_texts = []
+        for doc_id in doc_ids:
+            doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
+            document_texts.append(f"Query: {query_text} \nDocument: {doc_text}")
 
-        with torch.no_grad():
-            outputs = model(**inputs)
-            # Use hidden states as document embeddings
-            embeddings = outputs.last_hidden_state.mean(dim=1)  # Mean pooling across tokens
+        # Generate queries for each document using the LLM
+        generated_queries = pipeline(document_texts, max_new_tokens=50, temperature=0.6, top_p=0.9)
 
-        # Now compute cosine similarity between query embedding and document embeddings
-        query_embedding = model(**tokenizer(query_text, return_tensors="pt").to(device)).last_hidden_state.mean(dim=1)
-
+        # Now calculate the relevance score for each document
         similarities = []
-        for doc_id, emb in zip(doc_ids, embeddings):
-            cosine_sim = F.cosine_similarity(query_embedding, emb.unsqueeze(0))
-            similarities.append((doc_id, cosine_sim.item()))
+        for i, generated_query in enumerate(generated_queries):
+            generated_query_text = generated_query[0]['generated_text']  # Get the generated text
 
-        # Sort documents based on cosine similarity scores (higher similarity is better)
+            # Calculate cosine similarity between the original query and the generated query
+            query_emb = tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).to(device)
+            generated_query_emb = tokenizer(generated_query_text, return_tensors="pt", padding=True,
+                                            truncation=True).to(device)
+
+            with torch.no_grad():
+                # Encode the original query and the generated query
+                query_emb = tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).to(device)
+                generated_query_emb = tokenizer(generated_query_text, return_tensors="pt", padding=True,
+                                                truncation=True).to(device)
+
+                # Get the embeddings from the LLM for both queries
+                query_embedding = pipeline.model(**query_emb).last_hidden_state.mean(dim=1)
+                generated_query_embedding = pipeline.model(**generated_query_emb).last_hidden_state.mean(dim=1)
+
+                # Calculate cosine similarity between the original query and the generated query
+                cosine_sim = F.cosine_similarity(query_embedding, generated_query_embedding)
+
+            # Append the score along with document ID
+            similarities.append((doc_ids[i], cosine_sim.item()))
+
+        # Sort documents by the similarity score
         reranked_docs[topic_id] = sorted(similarities, key=lambda x: x[1], reverse=True)
 
     return reranked_docs
@@ -167,8 +189,7 @@ def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:
         for query_id, documents in query_results.items():
             rank = 1
-            # Iterate over sorted (doc_id, similarity_score) tuples
             for doc_id, score in documents:
-                # Write the output in the desired format: topic_id, Q0, doc_id, rank, score, my_bm25_system
-                file.write(f"{query_id} Q0 {doc_id} {rank} {score:.6f} my_reranked_system\n")
+                # Write in the required format
+                file.write(f"{query_id} Q0 {doc_id} {rank} {score:.6f} my_bm25_system\n")
                 rank += 1

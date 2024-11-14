@@ -5,22 +5,28 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from LLMRerankSearch import rerank_documents_with_qg, read_results, write_ranked_results
 
+# Set environment variable to store models on netstore
+os.environ["TRANSFORMERS_CACHE"] = '/mnt/netstore1_home/'
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
-# os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
-# os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
 
+# Hugging Face token (keep your token private)
 hf_token = "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"
 
-model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+# Use the smaller model 'Llama-3.2-1B-Instruct'
+model_id = "meta-llama/Meta-Llama-3.2-1B-Instruct"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model = AutoModelForCausalLM.from_pretrained(model_id,
-                                            torch_dtype=torch.float16,
-                                            device_map="auto",
-                                            use_auth_token=hf_token)
+
+# Load the model and tokenizer, specifying the cache directory
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    torch_dtype=torch.float16,  # Adjust dtype for reduced memory usage
+    device_map="auto",
+    use_auth_token=hf_token
+)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 
-# Create the text-generation pipeline without the 'device' argument
+# Create the text-generation pipeline
 llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, model_kwargs={"torch_dtype": torch.bfloat16})
 
 # Set the pad token ID to match the tokenizer's pad token

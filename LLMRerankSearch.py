@@ -124,65 +124,51 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     return batch_scores
 
 
-def rerank_documents_with_qg(doc_results, topics, answers, llm_pipeline, tokenizer, device, batch_size=1):
+def rerank_documents_with_embeddings(doc_results, topics, answers, model, tokenizer, device, batch_size=8):
     reranked_docs = {}
 
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token  # Use eos_token as pad_token if none exists
+        tokenizer.pad_token = tokenizer.eos_token  # Ensure pad_token is set
 
-    # Loop over each topic and its document results
     for topic_id, doc_ids in doc_results.items():
         query = next((topic for topic in topics if topic['Id'] == topic_id), None)
         if not query:
             continue
 
-        # Get answers for the topic
         topic_answers = [answer for answer in answers if str(answer['Id']) == str(topic_id)]
 
-        # Create query-document pairs: each document is paired with the query
-        query_document_pairs = [(query, doc) for doc in doc_ids]
+        # Prepare query and documents for tokenization
+        query_text = f"{query['Title']} {query['Body']}"
+        document_texts = [f"{query_text} {answer['Text']}" for answer in topic_answers]
 
-        # Concatenate query and document to prepare for tokenization
-        query_document_texts = [f"{pair[0]} {pair[1]}" for pair in query_document_pairs]
+        # Tokenize the batch in one go
+        inputs = tokenizer(document_texts, return_tensors="pt", padding=True, truncation=True).to(device)
 
-        # Process documents in smaller batches
-        all_ranked_docs = []
-        for i in range(0, len(query_document_texts), batch_size):
-            batch = query_document_texts[i:i + batch_size]
+        with torch.no_grad():
+            outputs = model(**inputs)
+            # Use hidden states as document embeddings
+            embeddings = outputs.last_hidden_state.mean(dim=1)  # Mean pooling across tokens
 
-            # Tokenize the batch
-            inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(device)
+        # Now compute cosine similarity between query embedding and document embeddings
+        query_embedding = model(**tokenizer(query_text, return_tensors="pt").to(device)).last_hidden_state.mean(dim=1)
 
-            # Get model predictions
-            with torch.no_grad():
-                outputs = llm_pipeline.model(**inputs)
+        similarities = []
+        for doc_id, emb in zip(doc_ids, embeddings):
+            cosine_sim = F.cosine_similarity(query_embedding, emb.unsqueeze(0))
+            similarities.append((doc_id, cosine_sim.item()))
 
-            # Assuming the model outputs logits
-            logits = outputs.logits
-
-            document_scores = logits.mean(dim=-1)  # Averaging logits across tokens
-            document_scores = document_scores.cpu().numpy()  # Move to CPU and convert to numpy array
-
-            # Rank documents by relevance score (higher scores are more relevant)
-            ranked_docs = sorted(zip(doc_ids[i:i + batch_size], document_scores.cpu().numpy()), key=lambda x: x[1], reverse=True)
-
-            all_ranked_docs.extend(ranked_docs)
-
-            torch.cuda.empty_cache()
-
-        # Store the reranked document IDs with their scores
-        reranked_docs[topic_id] = all_ranked_docs  # Store as a list of (doc_id, score) tuples
+        # Sort documents based on cosine similarity scores (higher similarity is better)
+        reranked_docs[topic_id] = sorted(similarities, key=lambda x: x[1], reverse=True)
 
     return reranked_docs
 
 
 def write_ranked_results(query_results, output_file):
-    """Write ranked results to a file."""
     with open(output_file, 'w') as file:
         for query_id, documents in query_results.items():
             rank = 1
-            # Iterate directly over the list of (doc_id, score) tuples
+            # Iterate over sorted (doc_id, similarity_score) tuples
             for doc_id, score in documents:
-                # Ensure score is a float and formatted properly
-                file.write(f"{query_id} Q0 {doc_id} {rank} {float(score):.6f} my_reranked_system\n")
+                # Write the output in the desired format: topic_id, Q0, doc_id, rank, score, my_bm25_system
+                file.write(f"{query_id} Q0 {doc_id} {rank} {score:.6f} my_reranked_system\n")
                 rank += 1

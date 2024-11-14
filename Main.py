@@ -5,20 +5,17 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from LLMRerankSearch import rerank_documents_with_qg, read_results, write_ranked_results
 
-# Ensure the environment variables are set to store models on netstore (IMPORTANT!)
-os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
-os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
+# os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
+# os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
 
-# Your Hugging Face access token (replace with your actual token)
-hf_token = "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"  # Replace with your Hugging Face access token
+hf_token = "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"
 
-# Specify the model ID for Meta-Llama 3.1
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = AutoModelForCausalLM.from_pretrained(model_id,
                                             torch_dtype=torch.float16,
-                                            device_map="auto",  # Let Accelerate offload parts of the model
+                                            device_map="auto",
                                             use_auth_token=hf_token)
 tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
 

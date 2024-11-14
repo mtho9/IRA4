@@ -2,6 +2,7 @@ import re
 import torch
 import torch.nn.functional as F
 from bs4 import BeautifulSoup
+from torch import autocast
 
 stop_words = set([
     # List of stop words
@@ -103,8 +104,8 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     """Process a batch of documents using the LLM pipeline and compute query likelihood."""
     batch_scores = {}
 
-    # Process in smaller batches to avoid OOM errors
-    batch_size = 4  # Adjust the batch size based on GPU memory
+    # Reduce the batch size to avoid OOM
+    batch_size = 2  # Decrease the batch size to reduce memory usage
     for i in range(0, len(doc_batch), batch_size):
         batch = doc_batch[i:i + batch_size]  # Create smaller batches
 
@@ -168,7 +169,7 @@ def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, 
             # Calculate cosine similarity between the original query and the generated query
             query_emb = tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).to(device)
             generated_query_emb = tokenizer(generated_query_text, return_tensors="pt", padding=True,
-                                            truncation=True).to(device)
+                                             truncation=True).to(device)
 
             with torch.no_grad():
                 # Get the logits for the query and generated query
@@ -188,7 +189,16 @@ def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, 
         # Sort documents by the similarity score
         reranked_docs[topic_id] = sorted(similarities, key=lambda x: x[1], reverse=True)
 
+        # Clear variables that are no longer needed to free up memory
+        del document_texts
+        del generated_queries
+        del similarities
+
+        # Clear GPU memory after processing each topic
+        torch.cuda.empty_cache()
+
     return reranked_docs
+
 
 
 def write_ranked_results(query_results, output_file):

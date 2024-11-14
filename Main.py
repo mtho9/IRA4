@@ -5,6 +5,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from LLMRerankSearch import rerank_documents_with_qg, read_results, write_ranked_results
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 # os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
 # os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
 

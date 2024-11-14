@@ -10,7 +10,7 @@ os.environ["TRANSFORMERS_CACHE"] = '/mnt/netstore1_home/'
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 
 # Hugging Face token (keep your token private)
-hf_token = "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"
+hf_token = "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"
 
 # Use the smaller model 'Llama-3.2-1B-Instruct'
 model_id = "meta-llama/Meta-Llama-3.2-1B-Instruct"

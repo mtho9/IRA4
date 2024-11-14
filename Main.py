@@ -12,6 +12,8 @@ os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
 # Model ID for Llama-3.2-1B-Instruct
 model_id = "meta-llama/Llama-3.2-1B-Instruct"
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 # Load the model and tokenizer
 model = AutoModelForCausalLM.from_pretrained(
     model_id,

@@ -199,8 +199,6 @@ def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, 
 
     return reranked_docs
 
-
-
 def write_ranked_results(query_results, output_file):
     with open(output_file, 'w') as file:
         for query_id, documents in query_results.items():

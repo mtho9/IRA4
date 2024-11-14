@@ -3,30 +3,33 @@ import json
 import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from LLMRerankSearch import read_results, rerank_documents_with_qg, write_ranked_results
 
-# Optional: Set the directory where the model is stored locally
-local_model_path = '/home/mandy.ho/IRA4/Llama-3.2-1B-Instruct'  # This is where you downloaded the model
+# Set environment variables for model cache and Hugging Face home
+os.environ['TRANSFORMERS_CACHE'] = '/mnt/netstore1_home/'
+os.environ['HF_HOME'] = '/mnt/netstore1_home/mandy.ho/HF'
 
-# Set the device (CUDA or CPU)
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# Model ID for Llama-3.2-1B-Instruct
+model_id = "meta-llama/Llama-3.2-1B-Instruct"
 
-# Load the model and tokenizer from the local directory
+# Load the model and tokenizer
 model = AutoModelForCausalLM.from_pretrained(
-    local_model_path,  # Path to the local directory where the model was downloaded
-    torch_dtype=torch.float16,  # You can use torch.bfloat16 as well, depending on your setup
-    device_map="auto"  # Automatically map the model to available GPUs (if any)
+    model_id,
+    torch_dtype=torch.float16,  # Optional: Use bfloat16 for mixed precision
+    device_map="auto",  # Automatically map the model to available GPUs
 )
 
-tokenizer = AutoTokenizer.from_pretrained(local_model_path)  # Load tokenizer from the same local path
+tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 # Create the text-generation pipeline
 llm_pipeline = pipeline(
     "text-generation",
     model=model,
     tokenizer=tokenizer,
-    model_kwargs={"torch_dtype": torch.float16},  # Use float16 for mixed precision
+    model_kwargs={"torch_dtype": torch.float16},  # Use mixed precision
 )
-# Set the pad token ID to match the tokenizer's pad token
+
+# Optional: Set pad token id
 llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id
 llm_pipeline.model.eval()
 

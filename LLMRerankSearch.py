@@ -101,31 +101,38 @@ def generate_prompt_for_qg(query_id, doc_ids, topics, answers):
 
 def process_batch_for_qg(doc_batch, pipeline, query_text):
     """Process a batch of documents using the LLM pipeline and compute query likelihood."""
-    outputs = pipeline(doc_batch, max_new_tokens=50, temperature=0.6, top_p=0.9,
-                       pad_token_id=pipeline.tokenizer.eos_token_id)
-
     batch_scores = {}
-    for i, output in enumerate(outputs):
-        # Get the generated query text from the LLM's output
-        generated_text = output[0]['generated_text']
 
-        # Compute the log-likelihood of the generated query matching the original query
-        input_ids = pipeline.tokenizer(query_text, return_tensors="pt").input_ids.to(pipeline.device)
-        generated_ids = pipeline.tokenizer(generated_text, return_tensors="pt").input_ids.to(pipeline.device)
+    # Process in smaller batches to avoid OOM errors
+    batch_size = 4  # Adjust the batch size based on GPU memory
+    for i in range(0, len(doc_batch), batch_size):
+        batch = doc_batch[i:i + batch_size]  # Create smaller batches
 
-        # Compute log-likelihood of the generated query against the original query
-        with torch.no_grad():
-            # Calculate log-probabilities for each token in the generated query
-            outputs = pipeline.model(input_ids=input_ids, labels=generated_ids)
-            log_likelihood = outputs.loss.item()  # This is the negative log-likelihood loss
+        with autocast():  # Enable mixed precision
+            outputs = pipeline(batch, max_new_tokens=50, temperature=0.6, top_p=0.9,
+                               pad_token_id=pipeline.tokenizer.eos_token_id)
 
-        # Assign the log-likelihood as the relevance score
-        batch_scores[i] = -log_likelihood  # Negative because loss is lower for more relevant queries
+        for j, output in enumerate(outputs):
+            generated_text = output[0]['generated_text']
+
+            # Tokenize both the original query and generated query once to avoid redundant tokenization
+            input_ids = pipeline.tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).input_ids.to(
+                pipeline.device)
+            generated_ids = pipeline.tokenizer(generated_text, return_tensors="pt", padding=True,
+                                               truncation=True).input_ids.to(pipeline.device)
+
+            with torch.no_grad():
+                # Compute the log-likelihood of the generated query against the original query
+                model_outputs = pipeline.model(input_ids=input_ids, labels=generated_ids)
+                log_likelihood = model_outputs.loss.item()  # This is the negative log-likelihood loss
+
+            # Assign the log-likelihood as the relevance score
+            batch_scores[j] = -log_likelihood  # Negative because lower loss means more relevant
+
+        # Clear GPU memory after each batch to prevent OOM
+        torch.cuda.empty_cache()
 
     return batch_scores
-
-
-
 
 
 def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, device):

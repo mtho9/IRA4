@@ -24,6 +24,7 @@ llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, mod
 
 # Set the pad token ID to match the tokenizer's pad token
 llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id
+llm_pipeline.model.eval()
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:

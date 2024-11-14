@@ -1,5 +1,6 @@
 import re
 import torch
+import torch.nn.functional as F
 from bs4 import BeautifulSoup
 
 stop_words = set([
@@ -124,8 +125,7 @@ def process_batch_for_qg(doc_batch, pipeline, query_text):
     return batch_scores
 
 
-import torch
-import torch.nn.functional as F
+
 
 
 def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, device):
@@ -164,17 +164,16 @@ def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, 
                                             truncation=True).to(device)
 
             with torch.no_grad():
-                # Encode the original query and the generated query
-                query_emb = tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).to(device)
-                generated_query_emb = tokenizer(generated_query_text, return_tensors="pt", padding=True,
-                                                truncation=True).to(device)
+                # Get the logits for the query and generated query
+                query_output = pipeline.model(**query_emb)
+                generated_query_output = pipeline.model(**generated_query_emb)
 
-                # Get the embeddings from the LLM for both queries
-                query_embedding = pipeline.model(**query_emb).last_hidden_state.mean(dim=1)
-                generated_query_embedding = pipeline.model(**generated_query_emb).last_hidden_state.mean(dim=1)
+                # Get logits from the model (usually this is what you would use in causal language models)
+                query_logits = query_output.logits.mean(dim=1)  # Averaging logits over tokens
+                generated_query_logits = generated_query_output.logits.mean(dim=1)  # Averaging logits over tokens
 
-                # Calculate cosine similarity between the original query and the generated query
-                cosine_sim = F.cosine_similarity(query_embedding, generated_query_embedding)
+                # Calculate cosine similarity between the original query logits and the generated query logits
+                cosine_sim = F.cosine_similarity(query_logits, generated_query_logits)
 
             # Append the score along with document ID
             similarities.append((doc_ids[i], cosine_sim.item()))

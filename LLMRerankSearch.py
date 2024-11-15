@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 from torch import autocast
 
 stop_words = set([
-    # List of stop words
     'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", 'your', 'yours', 'yourself',
     'yourselves',
     'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they',
@@ -29,54 +28,42 @@ stop_words = set([
     'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't", '-', '.'
 ])
 
-
 def clean_text(text):
-    """Clean the input text by removing HTML, punctuation, and stop words."""
     text = remove_html(text)
-    text = remove_punctuation(text).lower()
+    text = remove_punctuation(text)
     text = remove_stop_words(text)
     return text
 
-
 def remove_html(text):
-    """Remove HTML tags from the text."""
     soup = BeautifulSoup(text, 'html.parser')
     return soup.get_text(separator=' ')
 
-
 def remove_punctuation(text):
-    """Remove punctuation from the text."""
     return re.sub(r'[^\w\s]', '', text)
 
-
 def remove_stop_words(text):
-    """Remove stop words from the text."""
     words = text.split()
     filtered_words = [word for word in words if word.lower() not in stop_words]
     return ' '.join(filtered_words)
 
-
 def read_results(file_path) -> dict:
-    """Read the results from a file."""
+    """Read the results from a file and organize them into a dictionary."""
     topicdict = {}
     with open(file_path, 'r') as file:
         for line in file:
-            parts = line.split()
-            topic_id = parts[0]
-            doc_id = parts[2]
+            parts = line.split()  # Split each line into parts
+            topic_id = parts[0]   # The topic ID is the first part
+            doc_id = parts[2]     # The document ID is the third part
 
             if topic_id not in topicdict:
-                topicdict[topic_id] = []
-            if len(topicdict[topic_id]) < 100:  # limit to 100 documents per topic
+                topicdict[topic_id] = []  # Initialize a list for this topic if it doesn't exist
+            if len(topicdict[topic_id]) < 100:  # Limit to 100 documents per topic
                 topicdict[topic_id].append(doc_id)
 
-    return topicdict
-
+    return topicdict  # Return the dictionary of topics and their associated document IDs in a list
 
 def generate_prompt_for_qg(query_id, doc_ids, topics, answers):
-    """Generate a prompt for the LLM to generate the query from the document."""
-
-    # Define the system message to guide the LLM
+    """Generate prompts to be used by the model."""
     system_message = "You are a relevance document judger for a search engine. " \
                      "For each document, generate the query based on the document's content. " \
                      "Then, calculate the relevance of the document to the original query based on how closely the generated query matches the original query."
@@ -90,7 +77,7 @@ def generate_prompt_for_qg(query_id, doc_ids, topics, answers):
     topic_body = query['Body']
     query_text = f"{topic_title} {topic_body}"
 
-    # Get the relevant documents
+    # Generate prompts for the documents based on the query
     prompts = []
     for doc_id in doc_ids:
         doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
@@ -99,111 +86,105 @@ def generate_prompt_for_qg(query_id, doc_ids, topics, answers):
 
     return prompts
 
-
 def process_batch_for_qg(doc_batch, pipeline, query_text):
-    """Process a batch of documents using the LLM pipeline and compute query likelihood."""
+    """Process a batch of documents using a query generation model and compute query likelihood scores."""
     batch_scores = {}
 
-    # Reduce the batch size to avoid OOM
-    batch_size = 2  # Decrease the batch size to reduce memory usage
+    # reducing batch size to avoid out of mem issues
+    batch_size = 2
     for i in range(0, len(doc_batch), batch_size):
-        batch = doc_batch[i:i + batch_size]  # Create smaller batches
+        batch = doc_batch[i:i + batch_size]  # smaller batches
 
-        with autocast():  # Enable mixed precision
+        with autocast():  # mixed precision to help w/ efficiency
             outputs = pipeline(batch, max_new_tokens=50, temperature=0.6, top_p=0.9,
                                pad_token_id=pipeline.tokenizer.eos_token_id)
 
+        # Process the generated output for each document
         for j, output in enumerate(outputs):
             generated_text = output[0]['generated_text']
 
-            # Tokenize both the original query and generated query once to avoid redundant tokenization
+            # Tokenize both the original query and the generated query to compute relevance
             input_ids = pipeline.tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).input_ids.to(
                 pipeline.device)
             generated_ids = pipeline.tokenizer(generated_text, return_tensors="pt", padding=True,
                                                truncation=True).input_ids.to(pipeline.device)
 
             with torch.no_grad():
-                # Compute the log-likelihood of the generated query against the original query
+                # computing the log-likelihood of the generated query against the original query
                 model_outputs = pipeline.model(input_ids=input_ids, labels=generated_ids)
-                log_likelihood = model_outputs.loss.item()  # This is the negative log-likelihood loss
+                log_likelihood = model_outputs.loss.item()
 
-            # Assign the log-likelihood as the relevance score
-            batch_scores[j] = -log_likelihood  # Negative because lower loss means more relevant
+            # store relevance score
+            batch_scores[j] = -log_likelihood
 
-        # Clear GPU memory after each batch to prevent OOM
+        # clear GPU memory after processing each batch to prevent out of mem
         torch.cuda.empty_cache()
 
     return batch_scores
 
-
 def rerank_documents_with_qg(doc_results, topics, answers, pipeline, tokenizer, device):
+    """Rerank documents based on the relevance of generated queries using cosine similarity."""
     reranked_docs = {}
 
-    # Ensure the pad_token is set correctly
+    # helps avoid issues during tokenization?
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token  # Ensure pad_token is set
+        tokenizer.pad_token = tokenizer.eos_token
 
-    # Loop through each topic and its corresponding documents
+    # loop through each topic and its doc
     for topic_id, doc_ids in doc_results.items():
-        # Get the query for the current topic
+        # query for that topic
         query = next((topic for topic in topics if topic['Id'] == topic_id), None)
         if not query:
             continue
 
         query_text = f"{query['Title']} {query['Body']}"
 
-        # Prepare a list to hold the document texts
+        # prep doc text for query gen
         document_texts = []
         for doc_id in doc_ids:
             doc_text = next((answer['Text'] for answer in answers if answer['Id'] == doc_id), "")
             document_texts.append(f"Query: {query_text} \nDocument: {doc_text}")
 
-        # Generate queries for each document using the LLM
+        # gen queries for each doc
         generated_queries = pipeline(document_texts, max_new_tokens=50, temperature=0.6, top_p=0.9)
 
-        # Now calculate the relevance score for each document
+        # calc cosine similarity for the generated query
         similarities = []
         for i, generated_query in enumerate(generated_queries):
-            generated_query_text = generated_query[0]['generated_text']  # Get the generated text
+            generated_query_text = generated_query[0]['generated_text']
 
-            # Calculate cosine similarity between the original query and the generated query
             query_emb = tokenizer(query_text, return_tensors="pt", padding=True, truncation=True).to(device)
             generated_query_emb = tokenizer(generated_query_text, return_tensors="pt", padding=True,
                                              truncation=True).to(device)
 
             with torch.no_grad():
-                # Get the logits for the query and generated query
                 query_output = pipeline.model(**query_emb)
                 generated_query_output = pipeline.model(**generated_query_emb)
 
-                # Get logits from the model (usually this is what you would use in causal language models)
-                query_logits = query_output.logits.mean(dim=1)  # Averaging logits over tokens
-                generated_query_logits = generated_query_output.logits.mean(dim=1)  # Averaging logits over tokens
+                query_logits = query_output.logits.mean(dim=1)
+                generated_query_logits = generated_query_output.logits.mean(dim=1)  # don't rlly understand logits
 
-                # Calculate cosine similarity between the original query logits and the generated query logits
                 cosine_sim = F.cosine_similarity(query_logits, generated_query_logits)
 
-            # Append the score along with document ID
-            similarities.append((doc_ids[i], cosine_sim.item()))
+            similarities.append((doc_ids[i], cosine_sim.item()))  # store score w doc id
 
-        # Sort documents by the similarity score
         reranked_docs[topic_id] = sorted(similarities, key=lambda x: x[1], reverse=True)
 
-        # Clear variables that are no longer needed to free up memory
+        # Clear variables to free up memory!!!!
         del document_texts
         del generated_queries
         del similarities
 
-        # Clear GPU memory after processing each topic
+        # Clear GPU memory after processing each topic !!!!!
         torch.cuda.empty_cache()
 
     return reranked_docs
 
 def write_ranked_results(query_results, output_file):
+    """Write the reranked results to a file."""
     with open(output_file, 'w') as file:
         for query_id, documents in query_results.items():
             rank = 1
             for doc_id, score in documents:
-                # Write in the required format
                 file.write(f"{query_id} Q0 {doc_id} {rank} {score:.6f} my_bm25_system\n")
                 rank += 1

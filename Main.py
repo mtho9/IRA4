@@ -23,6 +23,10 @@ model = AutoModelForCausalLM.from_pretrained(
 
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 
+# Ensure the pad_token is set correctly (set to eos_token if None)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
 # Create the text-generation pipeline
 llm_pipeline = pipeline(
     "text-generation",
@@ -31,7 +35,7 @@ llm_pipeline = pipeline(
     model_kwargs={"torch_dtype": torch.float16},  # Use mixed precision
 )
 
-# Optional: Set pad token id
+# Set pad_token_id for the model's generation config to avoid warnings
 llm_pipeline.model.generation_config.pad_token_id = tokenizer.pad_token_id
 llm_pipeline.model.eval()
 
